@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <cassert>
+#include <iomanip>
 
 using namespace std;
 
@@ -55,16 +56,16 @@ public:
     int y;
     int w;
     int h;
-    int center_x;
-    int center_y;
-    Floorplan(int id = 0, int x = 0, int y = 0, int w = 0, int h = 0, int center_x = 0, int center_y = 0) {
+    double center_x;
+    double center_y;
+    Floorplan(int id = 0, int x = 0, int y = 0, int w = 0, int h = 0, double center_x = 0.0, double center_y = 0.0) {
         this->module_id = id;
         this->x = x;
         this->y = y;
         this->w = w;
         this->h = h;
-        this->center_x = x + (w / 2); //?? odd or even?
-        this->center_y = y + (h / 2); //?? odd or even?
+        this->center_x = x + (w / 2.0); //?? odd or even?
+        this->center_y = y + (h / 2.0); //?? odd or even?
     }
 };
 
@@ -90,8 +91,6 @@ void print_board(vector<vector<char> > &ans) {
 
 vector<Floorplan> floor_plan_out;
 Floorplan out_f_plan;
-
-// , vector<Net> &nets
 
 int solve(vector<Module> &modules) {
 
@@ -127,9 +126,9 @@ int solve(vector<Module> &modules) {
 
         int need_mult = modules[k].mult;
         int need_clb = modules[k].clb;
-        cout << "# of module: " << k << "\n";
-        cout << "module num: " << modules[k].module_num << "\n";
-        cout << "needed M:" << need_mult * 3 << " needed C:" << need_clb << "\n";
+        // cout << "# of module: " << k << "\n";
+        // cout << "module num: " << modules[k].module_num << "\n";
+        // cout << "needed M:" << need_mult * 3 << " needed C:" << need_clb << "\n";
         
         if (height_flag == 0) {
             height = need_mult * 3;
@@ -163,7 +162,6 @@ int solve(vector<Module> &modules) {
         // cout << "h: " << height << "\n";
 
         while (attempt_flag) {
-            cout << "FK";
             int curr_x, curr_y;
             int loop_flag = 0;
             for (int i = 0; i < C; ++i) {
@@ -171,19 +169,13 @@ int solve(vector<Module> &modules) {
                     
                     if (board[j][i] != 'O') {
                         int tmp_j = j;
-                        cout << "before j: " << j << "\n";
-                        cout << "i: " << i << "\n";
 
                         while (board[j][i] != 'O') {
                             j++;
                         }
-                        cout << "after j: " << j << "\n";
-
                         x = i;
-                        y = R - j; // ??? 
-                        y_re = R - 1 - y; // y_re = 65
-                        
-                        cout << "y_re: " << y_re << "\n";
+                        y = R - j; 
+                        y_re = R - 1 - y; 
                         attempt_flag = 0;
                         loop_flag = 1;
                         height = j - tmp_j;
@@ -194,30 +186,23 @@ int solve(vector<Module> &modules) {
                     break;
             }
         }
-        // cout << "FUCK H: " << height << "\n";
         
-        // handle how many cols for mult
-        // int width_used_mult = 1;
-        int width_used_mult = 0;
 
         // cal the width
         // TODO:
-        int width = need_clb / height + width_used_mult;
+        int width = need_clb / height;
         int cnt_clb = 0, cnt_mul = 0;
 
-        // cout << "origin h " << height << "\n";
-        // cout << "origin w " << width << "\n";
 
         ////
         // adjust the loop! (init point should be different in other modules!)
         ////
 
-        cout << "x: " << x << "\n";
-        cout << "y: " << y << "\n";
+        // cout << "x: " << x << "\n";
+        // cout << "y: " << y << "\n";
 
         if (x + width > C) {
             is_satisfied = 0;
-            // break;
         }
         else {
             for (int i = y_re; i > y_re - height; --i) {
@@ -279,21 +264,12 @@ int solve(vector<Module> &modules) {
                     else if (board[i][j] == 'C') {
                         cnt_clb++;
                     }
-                    // else if (board[i][j] == 'O') {
-                    //     cout << "Overlap!" << "\n";
-                    //     break;
-                    // }
                     board[i][j] = 'O';
                 }
             }
         }
 
         if (is_satisfied == 0) {
-            // for (int i = y_re; i > y_re - height; --i) {
-            //     for (int j = x; j < x + width; ++j) {
-            //         board[i][j] = board_prev[i][j];
-            //     }
-            // }
             for (int i = 0; i < R; ++i) {
                 for (int j = 0; j < C; ++j) {
                     board[i][j] = board_prev[i][j];
@@ -323,17 +299,10 @@ int solve(vector<Module> &modules) {
                 }
                 max_height = 0;
 
-                // num per C
-                // num_mult_per_C -= max_height;
             }
             continue; // don't do next part!
         }
         else {
-            // for (int i = y_re; i > y_re - height; --i) {
-            //     for (int j = x; j < x + width; ++j) {
-            //         board_prev[i][j] = board[i][j];
-            //     }
-            // }
             for (int i = 0; i < R; ++i) {
                 for (int j = 0; j < C; ++j) {
                     board_prev[i][j] = board[i][j];
@@ -341,14 +310,10 @@ int solve(vector<Module> &modules) {
             }
         }
 
-        // cout << "after h " << height << "\n";
-        // cout << "after w " << width << "\n";
-        // cout << "mul " << cnt_mul << "\n";
-        // cout << "clb " << cnt_clb << "\n";
         out_f_plan = Floorplan(modules[k].module_num, x, y, width, height);
         floor_plan_out.push_back(out_f_plan);
 
-        print_board(board);
+        // print_board(board);
         // assert(cnt_mul >= need_mult * 3);
         // assert(cnt_clb >= need_clb);
         // update x, y
@@ -361,18 +326,43 @@ int solve(vector<Module> &modules) {
             y += max_height;
             y_re = R - 1 - y;
             max_height = 0;
-
-            // num per C
-            // num_mult_per_C -= max_height;
         }
-        // cout << "max height: " << max_height << "\n";
     }
     return 0;
     
 }
 
 double cal_HPWL(vector<Net> &nets, vector<Floorplan> &floor_plan) {
-    
+    stable_sort(floor_plan.begin(), floor_plan.end(), 
+        [](const Floorplan &a, const Floorplan &b) {
+            return a.module_id < b.module_id;
+    });
+    double HPWL = 0;
+    for (int i = 0; i < nets.size(); ++i) {
+        // for each net
+        double max_x = INT_MIN;
+        double max_y = INT_MIN;
+        double min_x = INT_MAX;
+        double min_y = INT_MAX;
+        for (int j = 0; j < nets[i].collect_nets.size(); ++j) {
+            int module_n = nets[i].collect_nets[j];
+            if (floor_plan[module_n - 1].center_x > max_x) {
+                max_x = floor_plan[module_n - 1].center_x;
+            }
+            if (floor_plan[module_n - 1].center_x < min_x) {
+                min_x = floor_plan[module_n - 1].center_x;
+            }
+            if (floor_plan[module_n - 1].center_y > max_y) {
+                max_y = floor_plan[module_n - 1].center_y;
+            }
+            if (floor_plan[module_n - 1].center_y < min_y) {
+                min_y = floor_plan[module_n - 1].center_y;
+            }
+            // floor_plan[module_n - 1].center_y
+        }
+        HPWL += ((max_x - min_x) + (max_y - min_y));
+    }
+    return HPWL;
 }
 
 int main(int argc, char* argv[]) {
@@ -418,12 +408,8 @@ int main(int argc, char* argv[]) {
         board_prev[i].resize(C);
     }
 
-
-    // cout << board.size() << "\n";
-    // cout << board[0].size() << "\n";
     
     /// init FPGA board
-    // cout << "C: " << C << "\n";
     for (int i = 0; i < R; ++i) {
         for (int j = 0; j < C; ++j) {
             if (j - S >= 0 && (j - S) % D == 0) {
@@ -461,9 +447,6 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    // for (int i = 0; i < modules.size(); ++i) {
-    //     cout << modules[i].module_num << " " << modules[i].clb << " " << modules[i].mult << "\n";
-    // }
 
     // read net
     vector<Net> nets;
@@ -488,14 +471,6 @@ int main(int argc, char* argv[]) {
         nets.push_back(net);
     }
 
-    // for (int i = 0; i < nets.size(); ++i) {
-    //     cout << nets[i].net_num << " ";
-    //     for (int j = 0; j < nets[i].collect_nets.size(); ++j) {
-    //         cout << nets[i].collect_nets[j] << " ";
-    //     }
-    //     cout << "\n";
-    // }
-
     // output floorplan
     int ans = solve(modules);
     if (ans != 0) {
@@ -504,9 +479,14 @@ int main(int argc, char* argv[]) {
     else {
         cout << "Successfully done!\n";
     }
-    cout << "SIZE: " << floor_plan_out.size() << "\n";
 
-    double hpwl = cal_HPWL(floor_plan_out, nets);
+    double hpwl = cal_HPWL(nets, floor_plan_out);
+    if ((int)((hpwl * 10) - ((int)hpwl * 10)) != 0) {
+        cout << "Total HPWL: " << fixed << setprecision(1) << hpwl << "\n";
+    }
+    else {
+        cout << "Total HPWL: " << fixed << setprecision(0) << hpwl << "\n";
+    }
 
     ofstream f_o;
     if (argc > 1) {
@@ -520,6 +500,13 @@ int main(int argc, char* argv[]) {
         f_o << floor_plan_out[i].x << " " << floor_plan_out[i].y << " " << floor_plan_out[i].w << " " << floor_plan_out[i].h;
         f_o << "\n";
     }
+    if ((int)((hpwl * 10) - ((int)hpwl * 10)) != 0) {
+        f_o << fixed << setprecision(1) << hpwl << "\n";
+    }
+    else {
+        f_o << fixed << setprecision(0) << hpwl << "\n";
+    }
+    
     f_o.close();
     cout << "Done floorplan!!\n";
     return 0;
