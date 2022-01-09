@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cassert>
 #include <iomanip>
+#include <climits>
+#include <random>
+#include <chrono>
 
 using namespace std;
 
@@ -14,6 +17,8 @@ vector<vector<char> > board_prev;
 
 int num_mult_per_C;
 int R, C, S, D;
+
+// double final_hpwl;
 
 class Module {
 public:
@@ -56,16 +61,38 @@ public:
     int y;
     int w;
     int h;
+    int used_clb;
+    int used_mult;
+    int need_clb;
+    int need_mult;
     double center_x;
     double center_y;
-    Floorplan(int id = 0, int x = 0, int y = 0, int w = 0, int h = 0, double center_x = 0.0, double center_y = 0.0) {
+    Floorplan(int id = 0, int x = 0, int y = 0, int w = 0, int h = 0, int used_clb = 0, int used_mult = 0, 
+              int need_clb = 0, int need_mult = 0, double center_x = 0.0, double center_y = 0.0) {
         this->module_id = id;
         this->x = x;
         this->y = y;
         this->w = w;
         this->h = h;
+        this->used_clb = used_clb;
+        this->used_mult = used_mult;
+        this->need_clb = need_clb;
+        this->need_mult = need_mult;
         this->center_x = x + (w / 2.0); //?? odd or even?
         this->center_y = y + (h / 2.0); //?? odd or even?
+    }
+    Floorplan(const Floorplan &f1) {
+        this->module_id = f1.module_id;
+        this->x = f1.x;
+        this->y = f1.y;
+        this->w = f1.w;
+        this->h = f1.h;
+        this->used_clb = f1.used_clb;
+        this->used_mult = f1.used_mult;
+        this->need_clb = f1.need_clb;
+        this->need_mult = f1.need_mult;
+        this->center_x = f1.x + (f1.w / 2.0); //?? odd or even?
+        this->center_y = f1.y + (f1.h / 2.0); //?? odd or even?
     }
 };
 
@@ -201,7 +228,7 @@ int solve(vector<Module> &modules) {
         // cout << "x: " << x << "\n";
         // cout << "y: " << y << "\n";
 
-        if (x + width > C) {
+        if (x + width >= C) {
             is_satisfied = 0;
         }
         else {
@@ -227,7 +254,7 @@ int solve(vector<Module> &modules) {
         // if need_mult == 0, just skip this loop
         while (cnt_mul < need_mult * 3 && need_mult != 0) {
             width++;
-            if (x + width > C) {
+            if (x + width >= C) {
                 is_satisfied = 0;
                 break;
             }
@@ -252,7 +279,7 @@ int solve(vector<Module> &modules) {
 
         while (cnt_clb < need_clb) {
             width++;
-            if (x + width > C) {
+            if (x + width >= C) {
                 is_satisfied = 0;
                 break;
             }
@@ -282,11 +309,11 @@ int solve(vector<Module> &modules) {
                 max_height = height;
             }
             // if height_flag == 1, then test x boundary
-            if (height_flag && x > C) {
+            if (height_flag && x >= C) {
                 attempt_flag = 1; // re enable attempt_flag
             }
 
-            if (x > C) {
+            if (x >= C) {
                 x = 0; 
                 // update y, restore max_height
                 y += max_height;
@@ -309,8 +336,8 @@ int solve(vector<Module> &modules) {
                 }
             }
         }
-
-        out_f_plan = Floorplan(modules[k].module_num, x, y, width, height);
+        // need_mult * 3 for finding real M
+        out_f_plan = Floorplan(modules[k].module_num, x, y, width, height, cnt_clb, cnt_mul, need_clb, need_mult * 3); 
         floor_plan_out.push_back(out_f_plan);
 
         // print_board(board);
@@ -320,7 +347,7 @@ int solve(vector<Module> &modules) {
         if (height > max_height)
             max_height = height;
         x += width;
-        if (x > C) {
+        if (x >= C) {
             x = 0; 
             // update y, restore max_height
             y += max_height;
@@ -333,7 +360,12 @@ int solve(vector<Module> &modules) {
 }
 
 double cal_HPWL(vector<Net> &nets, vector<Floorplan> &floor_plan) {
-    stable_sort(floor_plan.begin(), floor_plan.end(), 
+    vector<Floorplan> floor_plan_for_cal;
+    for (int i = 0; i < floor_plan.size(); ++i) {
+        floor_plan_for_cal.push_back(floor_plan[i]);
+    }
+
+    stable_sort(floor_plan_for_cal.begin(), floor_plan_for_cal.end(), 
         [](const Floorplan &a, const Floorplan &b) {
             return a.module_id < b.module_id;
     });
@@ -346,17 +378,17 @@ double cal_HPWL(vector<Net> &nets, vector<Floorplan> &floor_plan) {
         double min_y = INT_MAX;
         for (int j = 0; j < nets[i].collect_nets.size(); ++j) {
             int module_n = nets[i].collect_nets[j];
-            if (floor_plan[module_n - 1].center_x > max_x) {
-                max_x = floor_plan[module_n - 1].center_x;
+            if (floor_plan_for_cal[module_n - 1].center_x > max_x) {
+                max_x = floor_plan_for_cal[module_n - 1].center_x;
             }
-            if (floor_plan[module_n - 1].center_x < min_x) {
-                min_x = floor_plan[module_n - 1].center_x;
+            if (floor_plan_for_cal[module_n - 1].center_x < min_x) {
+                min_x = floor_plan_for_cal[module_n - 1].center_x;
             }
-            if (floor_plan[module_n - 1].center_y > max_y) {
-                max_y = floor_plan[module_n - 1].center_y;
+            if (floor_plan_for_cal[module_n - 1].center_y > max_y) {
+                max_y = floor_plan_for_cal[module_n - 1].center_y;
             }
-            if (floor_plan[module_n - 1].center_y < min_y) {
-                min_y = floor_plan[module_n - 1].center_y;
+            if (floor_plan_for_cal[module_n - 1].center_y < min_y) {
+                min_y = floor_plan_for_cal[module_n - 1].center_y;
             }
             // floor_plan[module_n - 1].center_y
         }
@@ -365,22 +397,108 @@ double cal_HPWL(vector<Net> &nets, vector<Floorplan> &floor_plan) {
     return HPWL;
 }
 
+double optimize(vector<Net> &nets, vector<Floorplan> &floor_plan, double hpwl) {
+    // sort according used mult and used clb
+    // stable_sort(floor_plan_out.begin(), floor_plan_out.end(), 
+    //     [](const Floorplan &a, const Floorplan &b) {
+    //         if (a.used_mult == b.used_mult) {
+    //             return a.used_clb > b.used_clb;
+    //         }
+    //         return a.used_mult > b.used_mult;
+    // });
+    auto start_time_opt = chrono::system_clock::now();
+
+    int swap_count = 0;
+    vector<Floorplan> floor_plan_tmp;
+    for (int i = 0; i < floor_plan.size(); ++i) {
+        floor_plan_tmp.push_back(floor_plan[i]);
+    }
+
+    // use swap_count to control
+    while (swap_count < 10000) {
+        for (int i = 0; i < floor_plan.size(); ++i) {
+            // swap once, 
+            // => better, then move to next obj. (i.e. ++i)
+            // => not better, swap again!
+            // floor_plan[i] is the pivot
+            // set maximum swap counting value
+            // if (swap_count > 1000) {
+            //     return final_hpwl;
+            // }
+            for (int j = 0; j < floor_plan.size(); ++j) {
+                // find condition...
+                if (j == i) {
+                    continue;
+                }
+                if (floor_plan[j].used_clb >= floor_plan[i].need_clb && floor_plan[j].used_mult >= floor_plan[i].need_mult
+                    && floor_plan[i].used_clb >= floor_plan[j].need_clb && floor_plan[i].used_mult >= floor_plan[j].need_mult) {
+                    // swap (id, need_clb, need_mult)
+                    // int tmp_id = floor_plan_tmp[j].module_id;
+                    // int tmp_need_clb = floor_plan_tmp[j].need_clb;
+                    // int tmp_need_mult = floor_plan_tmp[j].need_mult;
+                    swap(floor_plan_tmp[j].module_id, floor_plan_tmp[i].module_id);
+                    swap(floor_plan_tmp[j].need_clb, floor_plan_tmp[i].need_clb);
+                    swap(floor_plan_tmp[j].need_mult, floor_plan_tmp[i].need_mult);
+                    // Then, calculate HPWL
+                    double tmp_hpwl = cal_HPWL(nets, floor_plan_tmp);
+                    // find better sol.
+                    if (tmp_hpwl < hpwl) {
+                        swap(floor_plan[j].module_id, floor_plan[i].module_id);
+                        swap(floor_plan[j].need_clb, floor_plan[i].need_clb);
+                        swap(floor_plan[j].need_mult, floor_plan[i].need_mult);
+                        hpwl = tmp_hpwl;
+                    }
+                    else {
+                        swap(floor_plan_tmp[j].module_id, floor_plan_tmp[i].module_id);
+                        swap(floor_plan_tmp[j].need_clb, floor_plan_tmp[i].need_clb);
+                        swap(floor_plan_tmp[j].need_mult, floor_plan_tmp[i].need_mult);
+                    }
+                    swap_count++;
+                    
+                    // break;
+                }
+                if (swap_count >= 10000) {
+                    return hpwl;
+                }
+                
+            }
+        }
+        auto end_time_opt = chrono::system_clock::now();
+        chrono::duration<double> elapsed_opt = end_time_opt - start_time_opt;
+        // cout << "time: " << elapsed.count() << "\n";
+        if (elapsed_opt.count() > 60) {
+            break;
+        }
+    }
+   
+    // for (int i = 0; i < floor_plan_tmp.size(); ++i) {
+    //     cout << floor_plan_tmp[i].module_id << " ";
+    //     cout << floor_plan_tmp[i].used_clb << " " << floor_plan_tmp[i].need_clb << " ";
+    //     cout << floor_plan_tmp[i].used_mult << " " << floor_plan_tmp[i].need_mult << " ";
+    //     cout << "\n";
+    // }
+
+    return hpwl;
+}
+
 int main(int argc, char* argv[]) {
-    string benchmark_path = "../benchmarks/";
+
+    auto start_time = chrono::system_clock::now();
+
     string tmp;
     string arch_path, module_path, net_path;
   
     if (argc > 1) { // given testcases
-        arch_path = benchmark_path + argv[1];
-        module_path = benchmark_path + argv[2];
-        net_path = benchmark_path + argv[3];
+        arch_path = argv[1];
+        module_path = argv[2];
+        net_path = argv[3];
     }
-    else {
-        cout << "Please given testcases!\n";
-        arch_path = benchmark_path + "case1.arch";
-        module_path = benchmark_path + "case1.module";
-        net_path = benchmark_path + "case1.net";
-    }
+    // else {
+    //     cout << "Please given testcases!\n";
+    //     arch_path = benchmark_path + "case1.arch";
+    //     module_path = benchmark_path + "case1.module";
+    //     net_path = benchmark_path + "case1.net";
+    // }
     ifstream in_arch(arch_path);
     ifstream in_module(module_path);
     ifstream in_net(net_path);
@@ -471,21 +589,114 @@ int main(int argc, char* argv[]) {
         nets.push_back(net);
     }
 
-    // output floorplan
+    // output initial floorplan
     int ans = solve(modules);
     if (ans != 0) {
         cout << "FAILED\n";
+        return -1;
     }
     else {
         cout << "Successfully done!\n";
     }
 
-    double hpwl = cal_HPWL(nets, floor_plan_out);
-    if ((int)((hpwl * 10) - ((int)hpwl * 10)) != 0) {
-        cout << "Total HPWL: " << fixed << setprecision(1) << hpwl << "\n";
+    vector<Floorplan> floor_plan_final;
+    vector<Floorplan> floor_plan_init;
+    vector<Floorplan> floor_plan_opt;
+    for (int i = 0; i < floor_plan_out.size(); ++i) {
+        floor_plan_final.push_back(floor_plan_out[i]);
+        floor_plan_init.push_back(floor_plan_out[i]);
+        floor_plan_opt.push_back(floor_plan_out[i]);
+    }
+
+    double final_hpwl = cal_HPWL(nets, floor_plan_opt); // find initial hpwl
+    double init_final_hpwl = final_hpwl; // save init hpwl
+    cout << "Initial HPWL: " << init_final_hpwl << "\n";
+    cout << "Start optimizing...\n";
+
+    // directly optimize
+    final_hpwl = optimize(nets, floor_plan_opt, init_final_hpwl);
+    if (final_hpwl < init_final_hpwl) {
+        floor_plan_final.clear();
+        for (int i = 0; i < floor_plan_opt.size(); ++i) {
+            floor_plan_final.push_back(floor_plan_opt[i]);
+        }
+    }
+
+    // put out back to init
+    floor_plan_opt.clear();
+    for (int i = 0; i < floor_plan_init.size(); ++i) {
+        floor_plan_opt.push_back(floor_plan_init[i]);
+    }
+
+    stable_sort(floor_plan_opt.begin(), floor_plan_opt.end(), 
+        [](const Floorplan &a, const Floorplan &b) {
+            if (a.used_mult == b.used_mult) {
+                return a.used_clb > b.used_clb;
+            }
+            return a.used_mult > b.used_mult;
+    });
+    
+    double final_hpwl_2 = optimize(nets, floor_plan_opt, init_final_hpwl);
+    if (final_hpwl_2 < final_hpwl) {
+        floor_plan_final.clear();
+        for (int i = 0; i < floor_plan_opt.size(); ++i) {
+            floor_plan_final.push_back(floor_plan_opt[i]);
+        }
+    }
+    final_hpwl = min(final_hpwl, final_hpwl_2);
+    // optimizing my random shuffle
+    // the shuffling times is decided by initial hpwl
+    int max_shuffle = 1000;
+    if (final_hpwl < 100000) {
+        max_shuffle = 500;
+    }
+    // else if (final_hpwl < 500000) {
+    //     max_shuffle = 500;
+    // }
+    // else {
+    //     max_shuffle = 200;
+    // }
+    cout << "Maximum shuffle iter: " << max_shuffle << "\n";
+
+    for (int k = 0; k < max_shuffle; ++k) {
+        floor_plan_opt.clear();
+        for (int i = 0; i < floor_plan_final.size(); ++i) {
+            floor_plan_opt.push_back(floor_plan_final[i]);
+        }
+
+        shuffle(floor_plan_opt.begin(), floor_plan_opt.end(), default_random_engine(k));
+        final_hpwl_2 = optimize(nets, floor_plan_opt, init_final_hpwl);
+        // if (k % 100 == 0)
+        //     cout << "Iter: " << k << ", hpwl: " << final_hpwl_2 << "\n";
+        if (final_hpwl_2 < final_hpwl) {
+            floor_plan_final.clear();
+            for (int i = 0; i < floor_plan_opt.size(); ++i) {
+                floor_plan_final.push_back(floor_plan_opt[i]);
+            }
+        }
+        final_hpwl = min(final_hpwl, final_hpwl_2);
+        
+        auto end_time = chrono::system_clock::now();
+        chrono::duration<double> elapsed = end_time - start_time;
+        // cout << "time: " << elapsed.count() << "\n";
+        if (elapsed.count() > 60 * 8) {
+            break;
+        }
+    }
+
+    double check_hpwl = cal_HPWL(nets, floor_plan_final); // check final hpwl again
+    assert(check_hpwl == final_hpwl);
+
+    stable_sort(floor_plan_final.begin(), floor_plan_final.end(), 
+        [](const Floorplan &a, const Floorplan &b) {
+            return a.module_id < b.module_id;
+    });
+
+    if ((int)((final_hpwl * 10) - ((int)final_hpwl * 10)) != 0) {
+        cout << "Final total HPWL: " << fixed << setprecision(1) << final_hpwl << "\n";
     }
     else {
-        cout << "Total HPWL: " << fixed << setprecision(0) << hpwl << "\n";
+        cout << "Fianl total HPWL: " << fixed << setprecision(0) << final_hpwl << "\n";
     }
 
     ofstream f_o;
@@ -493,18 +704,21 @@ int main(int argc, char* argv[]) {
         f_o.open(argv[4]);
     }
     else {
-        f_o.open("case1.floorplan");
+        cout << "Unknown command!" << "\n";
+        return -1;
     }
-    for (int i = 0; i < floor_plan_out.size(); ++i) {
-        f_o << floor_plan_out[i].module_id << " ";
-        f_o << floor_plan_out[i].x << " " << floor_plan_out[i].y << " " << floor_plan_out[i].w << " " << floor_plan_out[i].h;
+
+    
+    for (int i = 0; i < floor_plan_final.size(); ++i) {
+        f_o << floor_plan_final[i].module_id << " ";
+        f_o << floor_plan_final[i].x << " " << floor_plan_final[i].y << " " << floor_plan_final[i].w << " " << floor_plan_final[i].h;
         f_o << "\n";
     }
-    if ((int)((hpwl * 10) - ((int)hpwl * 10)) != 0) {
-        f_o << fixed << setprecision(1) << hpwl << "\n";
+    if ((int)((final_hpwl * 10) - ((int)final_hpwl * 10)) != 0) {
+        f_o << fixed << setprecision(1) << final_hpwl << "\n";
     }
     else {
-        f_o << fixed << setprecision(0) << hpwl << "\n";
+        f_o << fixed << setprecision(0) << final_hpwl << "\n";
     }
     
     f_o.close();
